@@ -50,6 +50,7 @@
 ####################################################################################################################################################################################################################################################################################################################
 
 import pygame
+import math
 
 print ()
 
@@ -70,6 +71,27 @@ class Room:
             s += ("\n")
             #print ("\n", end = "", sep = '')
         return s
+
+class Bullet:
+    
+    def __init__ (self, width, length, startX, startY, directionX, directionY, speed):
+        self.width, self.length, self.startX, self.startY, self.speed  = width, length, startX, startY, speed
+        deltaX = directionX - startX
+        deltaY = directionY - startY
+        length = math.sqrt((deltaX * deltaX) + (deltaY * deltaY))
+        self.directionVector = [(deltaX/length), (deltaY/length)]
+        if math.sqrt((self.directionVector[0] * self.directionVector[0]) + (self.directionVector[1] * self.directionVector[1])) > 1:
+            print ("TOO BIG!")
+        self.startVector = [self.startX, self.startY]
+        self.endVector = [self.startX + self.directionVector[0]*self.length, self.startY + self.directionVector[1]*self.length]
+        
+    # updates self on position based on direction and speed
+    def Move(self):
+        self.startVector[0] += self.speed * self.directionVector[0]
+        self.startVector[1] += self.speed * self.directionVector[1]
+        self.endVector[0] += self.speed * self.directionVector[0]
+        self.endVector[1] += self.speed * self.directionVector[1]
+        
 
 
 def main():
@@ -101,12 +123,98 @@ def main():
     
     running = True
 
+    # Some variables for player position
+    playX = 100
+    playY = 100
+    movementBools = {
+        "up": False,
+        "down": False,
+        "left": False,
+        "right": False
+    }
+    
+    # Line variables
+    drawingLine = False
+    startX, startY = 0, 0
+    endX, endY = 10, 10
+    lineLength = 150
+    
+    # put all bullets in here
+    bullets = []
+    bullets.append(Bullet(3, 50, startX, startY, endX, endY, 0.4))
+    line = bullets[0]
+
     while running:
         screen.fill(white)
         # Gets ALL events from the event queue
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+            
+            # If event is WASD, modify player movement bools
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_w:
+                    movementBools["up"] = True
+                if event.key == pygame.K_s:
+                    movementBools["down"] = True
+                if event.key == pygame.K_a:
+                    movementBools["left"] = True
+                if event.key == pygame.K_d:
+                    movementBools["right"] = True
+            elif event.type == pygame.KEYUP:
+                if event.key == pygame.K_w:
+                    movementBools["up"] = False
+                if event.key == pygame.K_s:
+                    movementBools["down"] = False
+                if event.key == pygame.K_a:
+                    movementBools["left"] = False
+                if event.key == pygame.K_d:
+                    movementBools["right"] = False
+                    
+            # On click, draw line from player to cursor
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                drawingLine = True
+                x, y = pygame.mouse.get_pos()
+                x1, y1 = font.size("@")
+                startX, startY = playX + (0.5*x1), playY+(0.5*y1)
+                bullets.append(Bullet(3, 50, startX, startY, x, y, 0.5))
+            elif event.type == pygame.MOUSEBUTTONUP:
+                drawingLine = False
+        
+        # create cursor
+        pygame.draw.rect(screen, blue, pygame.Rect(pygame.mouse.get_pos(),(10,10)))
+        
+        """
+        # draw line
+        if drawingLine:
+            x, y = font.size("@")
+            startX, startY = playX + (0.5*x), playY+(0.5*y)
+            endX, endY = pygame.mouse.get_pos()
+            pygame.draw.line(screen, blue, (int(startX), int(startY)), (int(endX), int(endY)), 1)
+        """
+        
+        # draw ALL bullets in bullets[]
+        for i in range (0, len(bullets)):
+            pygame.draw.line(screen, blue, (int(bullets[i].startVector[0]), int(bullets[i].startVector[1])), (int(bullets[i].endVector[0]), int(bullets[i].endVector[1])), bullets[i].width)
+            bullets[i].Move()
+        #pygame.draw.line(screen, blue, (int(line.startVector[0]), int(line.startVector[1])), (int(line.endVector[0]), int(line.endVector[1])), line.width)
+        #line.Move()
+
+        # move player
+        if movementBools["up"]:
+            playY -= 0.2
+        if movementBools["down"]:
+            playY += 0.2
+        if movementBools["left"]:
+            playX -= 0.2
+        if movementBools["right"]:
+            playX += 0.2
+        
+        # Now manipulate all the on screen objects
+        screen.blit(font.render("@", True, (blue)), (int(playX), int(playY)))
+        pygame.display.update()
+
+
     
 
 main()
