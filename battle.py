@@ -1,3 +1,7 @@
+##########################################################################################################################################################
+#DESIGN LAYOUT
+##########################################################################################################################################################
+
 # There are three paths, and each path has 10 perks.
 # Whenever you level up, you're offered three perks at random, and one perk from your path that you chose.
 # Max Level is 10. There are 11 Floors, 11th Floor is the boss, everything else is randomly generated monsters.
@@ -39,3 +43,102 @@
 # Everything is in place...
 # There is a main menu, a settings menu, various game modes (Arena? Speedrun?), at least 30 Perks, and 20 items.
 # At least 6 different types of enemies, and 2 types of bosses. 
+
+
+##########################################################################################################################################################
+#CODE AND STUFF
+####################################################################################################################################################################################################################################################################################################################
+
+import pygame
+
+print ()
+
+class Room:
+    
+    # Takes in width and height on initialization
+    def __init__ (self, width, height):
+        self.width = width
+        self.height = height
+    
+    # Displays a box of dots with the rooms proportions
+    def display (self):
+        s = ""
+        for x in range (0, self.height):
+            for y in range (0, self.width):
+                s += (".")
+                #print (".", end = "", sep = '')
+            s += ("\n")
+            #print ("\n", end = "", sep = '')
+        return s
+
+
+def main():
+    room = Room(10,4)
+    print(room.display())
+    pygame.init()
+    
+    # create a surface on screen that has 240x180 size
+    screen = pygame.display.set_mode((1080,680))
+    
+    # fill it with white!
+    white = (255, 255, 255) 
+    green = (0, 255, 0) 
+    blue = (0, 0, 128) 
+    screen.fill(white)
+    
+    # Set it's caption to...Battle.yeah?
+    pygame.display.set_caption('Battle.yeah') 
+    
+    # Create a font for text to be used on screen
+    font = pygame.font.Font('freesansbold.ttf', 32) 
+    
+    # Display text
+    screen.blit(font.render(room.display(), True, (blue)), (250, 115))
+
+    # Updates screen to match new changes.
+    pygame.display.update()
+
+    
+    running = True
+
+    while running:
+        screen.fill(white)
+        # Gets ALL events from the event queue
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+    
+
+main()
+print ("\nHello World!")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
