@@ -110,6 +110,12 @@ class Bullet:
         w, h = pygame.display.get_surface().get_size()
         if self.startVector[0] > w and self.endVector[0] > w:
             self.dead = True
+        if self.startVector[0] < 0 and self.endVector[0] < 0:
+            self.dead = True
+        if self.startVector[1] > h and self.endVector[1] > h:
+            self.dead = True
+        if self.startVector[1] < 0 and self.startVector[1] < 0:
+            self.dead = True
 
 
 def main():
@@ -215,6 +221,13 @@ def main():
         for i in range (0, len(bullets)):
             pygame.draw.line(screen, blue, (int(bullets[i].startVector[0]), int(bullets[i].startVector[1])), (int(bullets[i].endVector[0]), int(bullets[i].endVector[1])), bullets[i].width)
             bullets[i].Move()
+
+        # if any bullets are out of bounds, remove them from bullets[]
+        temp = []
+        for i in range (0, len(bullets)):
+            if not bullets[i].dead:
+                temp.append(bullets[i])
+        bullets = temp
 
         # move player
         if movementBools["up"]:
