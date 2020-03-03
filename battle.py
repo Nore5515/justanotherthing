@@ -74,24 +74,42 @@ class Room:
 
 class Bullet:
     
+    # a lot is going on, but in reality its not that bad.
     def __init__ (self, width, length, startX, startY, directionX, directionY, speed):
-        self.width, self.length, self.startX, self.startY, self.speed  = width, length, startX, startY, speed
+        # assigning variables.
+        self.width, self.speed  = width, speed
+        self.dead = False
+        
+        # get the deltaX and Y of the position. This is essentially the X and Y length from start vector and direction vector.
         deltaX = directionX - startX
         deltaY = directionY - startY
-        length = math.sqrt((deltaX * deltaX) + (deltaY * deltaY))
-        self.directionVector = [(deltaX/length), (deltaY/length)]
+        
+        # get the distance between start and direction vector.
+        endLength = math.sqrt((deltaX * deltaX) + (deltaY * deltaY))
+        
+        # create and save the direction vector, aka a 1 length vector pointing from the start vector to the direction vector
+        self.directionVector = [(deltaX/endLength), (deltaY/endLength)]
+        
+        # if it breaks, say too big!
         if math.sqrt((self.directionVector[0] * self.directionVector[0]) + (self.directionVector[1] * self.directionVector[1])) > 1:
             print ("TOO BIG!")
-        self.startVector = [self.startX, self.startY]
-        self.endVector = [self.startX + self.directionVector[0]*self.length, self.startY + self.directionVector[1]*self.length]
+            
+        # save the start vector, then create and save the end vector by multiplying the length by the direction vector.
+        self.startVector = [startX, startY]
+        self.endVector = [startX + self.directionVector[0]*length, startY + self.directionVector[1]*length]
         
     # updates self on position based on direction and speed
     def Move(self):
+        # update all variables to new positions
         self.startVector[0] += self.speed * self.directionVector[0]
         self.startVector[1] += self.speed * self.directionVector[1]
         self.endVector[0] += self.speed * self.directionVector[0]
         self.endVector[1] += self.speed * self.directionVector[1]
         
+        # flag for removal if out of bounds
+        w, h = pygame.display.get_surface().get_size()
+        if self.startVector[0] > w and self.endVector[0] > w:
+            self.dead = True
 
 
 def main():
@@ -197,8 +215,6 @@ def main():
         for i in range (0, len(bullets)):
             pygame.draw.line(screen, blue, (int(bullets[i].startVector[0]), int(bullets[i].startVector[1])), (int(bullets[i].endVector[0]), int(bullets[i].endVector[1])), bullets[i].width)
             bullets[i].Move()
-        #pygame.draw.line(screen, blue, (int(line.startVector[0]), int(line.startVector[1])), (int(line.endVector[0]), int(line.endVector[1])), line.width)
-        #line.Move()
 
         # move player
         if movementBools["up"]:
