@@ -55,6 +55,7 @@
 import pygame
 import math
 import os
+import copy
 
 print ()
 
@@ -98,6 +99,7 @@ class Room:
         self.height = height
         self.roomEnemies = {}
         self.running = True
+        self.weapon = "Arrow"
         
         # Line variables
         drawingLine = False
@@ -117,6 +119,14 @@ class Room:
         self.staircases = []
         self.staircases.append(Stairs("First Floor", int(width/2), int(3*height/4), 30, 30, self.blue, self))
         self.staircases[0].ExitPosition(int(width/2), int(height/4))
+
+        # generate the dict of bullet types
+        # width, length, speed, lifetime, deceleration, damage
+        self.bulletDict = {
+            "Arrow": Bullet(3, 45, 1.50, 800, 0.001, 1),
+            "Sword": Bullet(30, 20, 0.75, 1000, 0.001, 3),
+            "Dagger": Bullet(10, 30, 1, 800, 0.001, 2) 
+        }
         
         # put all bullets in here
         self.bullets = []
@@ -151,11 +161,29 @@ class Room:
                     self.movementBools["right"] = False
                     
             # On click, fire a bullet from player aimed at the cursor
+            # mouse binds are as follows;
+            # M1 - 1, M2 - 3, scroll wheel click - 2
+            # scroll wheel up - 4, scroll wheel down - 5
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 x, y = pygame.mouse.get_pos()
                 x1, y1 = self.font.size("@")
                 self.startX, self.startY = self.playX + (0.5*x1), self.playY+(0.5*y1)
-                self.bullets.append(Bullet(3, 50, self.startX, self.startY, x, y, 0.5))
+                if event.button == 1:
+                    self.bullets.append(self.bulletDict[self.weapon].start(self.startX, self.startY, x, y))
+                elif event.button == 4:
+                    if self.weapon == "Arrow":
+                        self.weapon = "Sword"
+                    elif self.weapon == "Sword":
+                        self.weapon = "Dagger"
+                    elif self.weapon == "Dagger":
+                        self.weapon = "Arrow"
+                elif event.button == 5:
+                    if self.weapon == "Arrow":
+                        self.weapon = "Dagger"
+                    elif self.weapon == "Sword":
+                        self.weapon = "Arrow"
+                    elif self.weapon == "Dagger":
+                        self.weapon = "Sword"
                 
         # move player
         if self.movementBools["up"]:
@@ -172,6 +200,7 @@ class Room:
 
         # create top of screen GUI
         self.screen.blit(self.font.render(str(self.floor), True, self.blue), (int(self.width/32),int(self.height/32)))
+        self.screen.blit(self.font.render(self.weapon, True, self.blue), (int(self.width/32), int(self.height/14)))
         
         # create cursor
         pygame.draw.rect(self.screen, self.blue, pygame.Rect(pygame.mouse.get_pos(),(10,10)))
@@ -184,7 +213,10 @@ class Room:
         # move all bullets, then draw them!
         for i in range (0, len(self.bullets)):
             self.bullets[i].Move()
-            pygame.draw.line(self.screen, self.blue, (int(self.bullets[i].startVector[0]), int(self.bullets[i].startVector[1])), (int(self.bullets[i].endVector[0]), int(self.bullets[i].endVector[1])), self.bullets[i].width)
+            #width = self.bullets[i].width
+            #starVec, endVec = self.bullets[i].startVector, self.bullets[i].endVector
+            pygame.draw.polygon(self.screen, self.blue, self.bullets[i].body)
+            #pygame.draw.line(self.screen, self.blue, (int(starVec[0]), int(starVec[1])), (int(endVec[0]), int(endVec[1])), self.bullets[i].width)
             
         # if any bullets are out of bounds, remove them from bullets[]
         temp = []
@@ -195,7 +227,7 @@ class Room:
         
         # for all enemies, update them!
         for i in range (0, len(self.enemies)):
-            self.enemies[i].Update()
+            self.enemies[i].Update(self.enemies, self.playRect)
         
         # for all enemies, draw them, then check to see if any of them were hit by bullets
         for i in range (0, len(self.enemies)):
@@ -250,21 +282,23 @@ class Stairs:
 
 class Bullet:
     
-    # a lot is going on, but in reality its not that bad.
-    def __init__ (self, width, length, startX, startY, directionX, directionY, speed):
+    # just take in the basic information about the bullet. assing position using create.
+    def __init__ (self, width, length, speed, lifetime, deceleration, damage):
         # assigning variables.
-        self.width, self.speed  = width, speed
+        self.width, self.length, self.speed, self.lifetime, self.damage = width, length, speed, lifetime, damage
         self.dead = False
+        self.deceleration = deceleration
+
+    """
+    # a lot is going on, but in reality its not that bad.
+    def __init__ (self, width, length, startX, startY, directionX, directionY, speed, lifetime, deceleration):
+        # assigning variables.
+        self.width, self.speed, self.lifetime = width, speed, lifetime
+        self.dead = False
+        self.deceleration = deceleration
         
-        # get the deltaX and Y of the position. This is essentially the X and Y length from start vector and direction vector.
-        deltaX = directionX - startX
-        deltaY = directionY - startY
-        
-        # get the distance between start and direction vector.
-        endLength = math.sqrt((deltaX * deltaX) + (deltaY * deltaY))
-        
-        # create and save the direction vector, aka a 1 length vector pointing from the start vector to the direction vector
-        self.directionVector = [(deltaX/endLength), (deltaY/endLength)]
+        # create and assign the direction vector
+        self.assignDirectionVector(startX, startY, directionX, directionY)
         
         # if it breaks, say too big!
         if math.sqrt((self.directionVector[0] * self.directionVector[0]) + (self.directionVector[1] * self.directionVector[1])) > 1:
@@ -273,9 +307,43 @@ class Bullet:
         # save the start vector, then create and save the end vector by multiplying the length by the direction vector.
         self.startVector = [startX, startY]
         self.endVector = [startX + self.directionVector[0]*length, startY + self.directionVector[1]*length]
+    """
+    
+    # modified init, to allow for post-generation location updating, but not speed and stuff.
+    # returns a copy of this class.
+    def start (self, startX, startY, dirX, dirY):
+        self.assignDirectionVector(startX, startY, dirX, dirY)
+        self.startVector = [startX, startY]
+        self.endVector = [startX + self.directionVector[0]*self.length, startY + self.directionVector[1]*self.length]
+        self.generateBodyPoints()
+        return copy.deepcopy(self)
+
+    def generateBodyPoints(self):
+        # create the bullet's rect body's points to draw
+        self.body = [
+            (int(self.endVector[0]-(self.width*self.directionVector[1])), int(self.endVector[1]+(self.width*self.directionVector[0]))),
+            (int(self.startVector[0]-(self.width*self.directionVector[1])), int(self.startVector[1]+(self.width*self.directionVector[0]))),
+            (int(self.startVector[0]+(self.width*self.directionVector[1])), int(self.startVector[1]-(self.width*self.directionVector[0]))),
+            (int(self.endVector[0]+(self.width*self.directionVector[1])), int(self.endVector[1]-(self.width*self.directionVector[0])))
+        ]
+        #print (int(self.endVector[0]), int(self.endVector[1]), self.body)
+
+    def assignDirectionVector(self, sX, sY, dX, dY):
+        # get the deltaX and Y of the position. This is essentially the X and Y length from start vector and direction vector.
+        deltaX = dX - sX
+        deltaY = dY - sY
         
+        # get the distance between start and direction vector.
+        endLength = math.sqrt((deltaX * deltaX) + (deltaY * deltaY))
+        
+        # create and save the direction vector, aka a 1 length vector pointing from the start vector to the direction vector
+        self.directionVector = [(deltaX/endLength), (deltaY/endLength)]
+
     # updates self on position based on direction and speed
     def Move(self):
+    
+        self.generateBodyPoints()
+    
         # update all variables to new positions
         self.startVector[0] += self.speed * self.directionVector[0]
         self.startVector[1] += self.speed * self.directionVector[1]
@@ -291,6 +359,15 @@ class Bullet:
         if self.startVector[1] > h and self.endVector[1] > h:
             self.dead = True
         if self.startVector[1] < 0 and self.startVector[1] < 0:
+            self.dead = True
+        
+        # decelerate the speed if it's greater than 0!
+        if self.speed > 0:
+            self.speed -= self.deceleration
+        
+        # if not dead, tick down the lifetime. Once lifetime hits 0, its dead.
+        self.lifetime -= 1
+        if self.lifetime <= 0:
             self.dead = True
 
 # IDEA; enemy health tied to their color? like, darker = healtheri, lighter = injured?
@@ -310,7 +387,8 @@ class Enemy:
         self.playingSound = False
     
     # runs every turn.
-    def Update (self):
+    # takes in a list of all current enemies, as well as the player's rect
+    def Update (self, enemies, player):
         
         # if you started a sound, countdown until sound is over. once its over, stop the channel.
         if self.playingSound:
@@ -351,14 +429,12 @@ class Enemy:
     def BulletHit (self, bullets):
         for i in range (0, len(bullets)):
             if not bullets[i].dead:
-                if self.body.collidepoint(int(bullets[i].startVector[0]), int(bullets[i].startVector[1])):
-                    self.health -= 1
-                    bullets[i].dead = True
-                    self.Flash()
-                elif self.body.collidepoint(int(bullets[i].endVector[0]), int(bullets[i].endVector[1])):
-                    self.health -= 1
-                    bullets[i].dead = True
-                    self.Flash()
+                for j in range (0, 4):
+                    if self.body.collidepoint(bullets[i].body[j]):
+                        self.health -= bullets[i].damage
+                        bullets[i].dead = True
+                        self.Flash()
+                        break
         
         # If you're outta health, you're outta luck.
         if self.health < 0:
