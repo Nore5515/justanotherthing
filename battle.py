@@ -56,23 +56,196 @@ import os
 
 print ()
 
+# Need to make this the "manager"
 class Room:
     
     # Takes in width and height on initialization
     def __init__ (self, width, height):
+    
+        # create a surface on screen that has 240x180 size
+        self.screen = pygame.display.set_mode((width, height))
+        
+        # fill it with white!
+        self.white = [255, 255, 255] 
+        self.green = [0, 255, 0] 
+        self.blue = [0, 0, 128]
+        self.screen.fill(self.white)
+        
+        # Create a font for text to be used on screen
+        self.font = pygame.font.Font('freesansbold.ttf', 32) 
+        
+        # Some variables for player position
+        self.playX = 100
+        self.playY = 100
+        self.floor = 1
+        self.x1, self.y1 = self.font.size("@")
+        self.playRect = pygame.Rect(self.playX, self.playY, self.x1, self.y1)
+        self.movementBools = {
+            "up": False,
+            "down": False,
+            "left": False,
+            "right": False
+        }
+        
+        # create a few tools to help make everything run smoothly.
+        self.clock = pygame.time.Clock()     # helps regulate FPS
+        self.hitEffect = pygame.mixer.Sound('thump.ogg')       # the enemy hit sound
+        
+        # assign variables
         self.width = width
         self.height = height
+        self.roomEnemies = {}
+        self.running = True
+        
+        # Line variables
+        drawingLine = False
+        startX, startY = 0, 0
+        endX, endY = 10, 10
+        lineLength = 150
+        
+        # generate all enemies for all floors (rn just one enemy per floor, but could be diff later)
+        for i in range (0, 12):
+            self.roomEnemies[i] = Enemy(300,300,50,50, 2, self.blue, 100, self.hitEffect, pygame.mixer.find_channel())
+
+        # put all enemies in here
+        self.enemies = []
+        self.enemies.append(Enemy(300,300,50,50, 20, self.blue, 100, self.hitEffect, pygame.mixer.find_channel()))
+
+        # generate all the stairs
+        self.staircases = []
+        self.staircases.append(Stairs("First Floor", int(width/2), int(3*height/4), 30, 30, self.blue, self))
+        self.staircases[0].ExitPosition(int(width/2), int(height/4))
+        
+        # put all bullets in here
+        self.bullets = []
+        
+    # note to self; break this big update into many smaller updates.
+    # also, staircase is broken. Don't know why.
+    def Update (self):
+        self.screen.fill(self.white)
+        
+        # Gets ALL events from the event queue
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self.running = False
+                
+            # If event is WASD, modify player movement bools
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_w:
+                    self.movementBools["up"] = True
+                if event.key == pygame.K_s:
+                    self.movementBools["down"] = True
+                if event.key == pygame.K_a:
+                    self.movementBools["left"] = True
+                if event.key == pygame.K_d:
+                    self.movementBools["right"] = True
+            elif event.type == pygame.KEYUP:
+                if event.key == pygame.K_w:
+                    self.movementBools["up"] = False
+                if event.key == pygame.K_s:
+                    self.movementBools["down"] = False
+                if event.key == pygame.K_a:
+                    self.movementBools["left"] = False
+                if event.key == pygame.K_d:
+                    self.movementBools["right"] = False
+                    
+            # On click, fire a bullet from player aimed at the cursor
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                x, y = pygame.mouse.get_pos()
+                x1, y1 = self.font.size("@")
+                self.startX, self.startY = self.playX + (0.5*x1), self.playY+(0.5*y1)
+                self.bullets.append(Bullet(3, 50, self.startX, self.startY, x, y, 0.5))
+                
+        # move player
+        if self.movementBools["up"]:
+            self.playY -= 0.2
+        if self.movementBools["down"]:
+            self.playY += 0.2
+        if self.movementBools["left"]:
+            self.playX -= 0.2
+        if self.movementBools["right"]:
+            self.playX += 0.2
+
+        # update player collision rect
+        playRect = pygame.Rect(int(self.playX), int(self.playY), self.x1, self.y1)
+
+        # create top of screen GUI
+        self.screen.blit(self.font.render(str(self.floor), True, self.blue), (int(self.width/32),int(self.height/32)))
+        
+        # create cursor
+        pygame.draw.rect(self.screen, self.blue, pygame.Rect(pygame.mouse.get_pos(),(10,10)))
+
+        # draw and update all staircases, check for player collision and enemy status.
+        for i in range (0, len(self.staircases)):
+            pygame.draw.rect(self.screen, self.staircases[i].color, self.staircases[i].body)
+            self.playX, self.playY, self.floor, self.enemies = self.staircases[i].Update(self.playRect, self.playX, self.playY, self.floor, self.enemies)
+        
+        # move all bullets, then draw them!
+        for i in range (0, len(self.bullets)):
+            self.bullets[i].Move()
+            pygame.draw.line(self.screen, self.blue, (int(self.bullets[i].startVector[0]), int(self.bullets[i].startVector[1])), (int(self.bullets[i].endVector[0]), int(self.bullets[i].endVector[1])), self.bullets[i].width)
+            
+        # if any bullets are out of bounds, remove them from bullets[]
+        temp = []
+        for i in range (0, len(self.bullets)):
+            if not self.bullets[i].dead:
+                temp.append(self.bullets[i])
+        self.bullets = temp 
+        
+        # for all enemies, update them!
+        for i in range (0, len(self.enemies)):
+            self.enemies[i].Update()
+        
+        # for all enemies, draw them, then check to see if any of them were hit by bullets
+        for i in range (0, len(self.enemies)):
+            pygame.draw.rect(self.screen, self.enemies[i].color, self.enemies[i].body)
+            self.enemies[i].BulletHit(self.bullets)
+        
+        # remove all hit enemies enemies[]
+        temp = []
+        for i in range (0, len(self.enemies)):
+            if not self.enemies[i].dead:
+                temp.append(self.enemies[i])
+        self.enemies = temp
+        
+        # Now blit the player's icon onto the screen, and then update the whole display
+        self.screen.blit(self.font.render("@", True, (self.blue)), (int(self.playX), int(self.playY)))
+        pygame.display.update()
+        
+        # how many frames AT MAX you want per second
+        self.clock.tick(3000)
+
+class Stairs:
+
+    def __init__ (self, name, posX, posY, width, height, color, room):
+        self.name, self.color = name, color
+        self.baseColor = self.color
+        self.open = False
+        self.body = pygame.Rect(posX, posY, width, height)
+        self.room = room
     
-    # Displays a box of dots with the rooms proportions
-    def display (self):
-        s = ""
-        for x in range (0, self.height):
-            for y in range (0, self.width):
-                s += (".")
-                #print (".", end = "", sep = '')
-            s += ("\n")
-            #print ("\n", end = "", sep = '')
-        return s
+    def ExitPosition (self, posX, posY):
+        self.exitPoint = [posX, posY]
+    
+    def Update (self, player, playX, playY, floor, enemies):
+        # if there are enemies, make the door red and inaccesable. otherwise, blue and open!
+        if len(enemies) > 0:
+            self.color = [128, 0, 0]
+            self.open = False
+        else:
+            self.color = self.baseColor
+            self.open = True
+
+        # if the player collides, teleport the player to the exit point, and increase floor by 1
+        if self.body.colliderect(player) and self.open:
+            playX = self.exitPoint[0]
+            playY = self.exitPoint[1]
+            floor += 1
+            if floor >= 12:
+                print("WOOHOO!")
+            else:
+                enemies.append(self.room.roomEnemies[floor])
+        return playX, playY, floor, enemies
 
 class Bullet:
     
@@ -133,8 +306,6 @@ class Enemy:
         self.flashDuration = duration
         self.hit = hitSound
         self.channel = hitChannel
-        self.tempCount = 0
-        self.tempTemp = self.hit.get_num_channels()
         self.playingSound = False
     
     # runs every turn.
@@ -194,150 +365,62 @@ class Enemy:
             self.hit.stop()
 
 def main():
-    room = Room(10,4)
-    print(room.display())
-    
-    # create a surface on screen that has 240x180 size
-    screen = pygame.display.set_mode((1080,680))
     
     # initialize pygame and the sound mixer
     pygame.mixer.init(44100, -16, 2, 4096)
     pygame.init()
     
-    # create a few tools to help make everything run smoothly.
-    clock = pygame.time.Clock()     # helps regulate FPS
-    hitEffect = pygame.mixer.Sound('thump.ogg')       # the enemy hit sound
+
     
-    # fill it with white!
-    white = [255, 255, 255] 
-    green = [0, 255, 0] 
-    blue = [0, 0, 128]
-    screen.fill(white)
+    
     
     # Set it's caption to...Battle.yeah?
     pygame.display.set_caption('Battle.yeah') 
     
-    # Create a font for text to be used on screen
-    font = pygame.font.Font('freesansbold.ttf', 32) 
+    # Create the "Room"
+    roomish = Room(1080,680)
     
-    # Display text
-    screen.blit(font.render(room.display(), True, (blue)), (250, 115))
+    # get the screen
+    screen = roomish.screen
 
     # Updates screen to match new changes.
     pygame.display.update()
 
     # put all enemies in here
-    enemies = []
-    enemies.append(Enemy(300,300,50,50, 200, blue, 100, hitEffect, pygame.mixer.find_channel()))
+    enemies = roomish.enemies
     
-    running = True
+    # TEMP colors
+    white = [255, 255, 255] 
+    green = [0, 255, 0] 
+    blue = [0, 0, 128]
+    screen.fill(white)
 
-    # Some variables for player position
-    playX = 100
-    playY = 100
-    movementBools = {
-        "up": False,
-        "down": False,
-        "left": False,
-        "right": False
-    }
+    # stairs!
+    w, h = pygame.display.get_surface().get_size()
+    staircases = roomish.staircases
     
-    # Line variables
-    drawingLine = False
-    startX, startY = 0, 0
-    endX, endY = 10, 10
-    lineLength = 150
+    # generic objects and stage props to render
+    stageText = {}
+    stageProps = {}
     
     # put all bullets in here
     bullets = []
     #bullets.append(Bullet(3, 50, startX, startY, endX, endY, 0.4))
     #line = bullets[0]
 
-    while running:
-        screen.fill(white)
-            
-        # Gets ALL events from the event queue
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-                
-            # If event is WASD, modify player movement bools
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_w:
-                    movementBools["up"] = True
-                if event.key == pygame.K_s:
-                    movementBools["down"] = True
-                if event.key == pygame.K_a:
-                    movementBools["left"] = True
-                if event.key == pygame.K_d:
-                    movementBools["right"] = True
-            elif event.type == pygame.KEYUP:
-                if event.key == pygame.K_w:
-                    movementBools["up"] = False
-                if event.key == pygame.K_s:
-                    movementBools["down"] = False
-                if event.key == pygame.K_a:
-                    movementBools["left"] = False
-                if event.key == pygame.K_d:
-                    movementBools["right"] = False
-                    
-            # On click, fire a bullet from player aimed at the cursor
-            elif event.type == pygame.MOUSEBUTTONDOWN:
-                x, y = pygame.mouse.get_pos()
-                x1, y1 = font.size("@")
-                startX, startY = playX + (0.5*x1), playY+(0.5*y1)
-                bullets.append(Bullet(3, 50, startX, startY, x, y, 0.5))
+    while roomish.running:
+        roomish.Update()
         
-        # create cursor
-        pygame.draw.rect(screen, blue, pygame.Rect(pygame.mouse.get_pos(),(10,10)))
-        
-        # for all enemies, update them!
-        for i in range (0, len(enemies)):
-            enemies[i].Update()
-        
-        # for all enemies, draw them, then check to see if any of them were hit by bullets
-        for i in range (0, len(enemies)):
-            pygame.draw.rect(screen, enemies[i].color, enemies[i].body)
-            enemies[i].BulletHit(bullets)
-        
-        # remove all hit enemies enemies[]
-        temp = []
-        for i in range (0, len(enemies)):
-            if not enemies[i].dead:
-                temp.append(enemies[i])
-        enemies = temp
-        
-        # move all bullets, then draw them!
-        for i in range (0, len(bullets)):
-            bullets[i].Move()
-            pygame.draw.line(screen, blue, (int(bullets[i].startVector[0]), int(bullets[i].startVector[1])), (int(bullets[i].endVector[0]), int(bullets[i].endVector[1])), bullets[i].width)
-            
-        # if any bullets are out of bounds, remove them from bullets[]
-        temp = []
-        for i in range (0, len(bullets)):
-            if not bullets[i].dead:
-                temp.append(bullets[i])
-        bullets = temp
+        # create top of screen GUI
+        screen.blit(roomish.font.render(str(roomish.floor), True, roomish.blue), (int(roomish.width/32),int(roomish.height/32)))
 
-        # move player
-        if movementBools["up"]:
-            playY -= 0.2
-        if movementBools["down"]:
-            playY += 0.2
-        if movementBools["left"]:
-            playX -= 0.2
-        if movementBools["right"]:
-            playX += 0.2
-        
-        # Now manipulate all the on screen objects
-        screen.blit(font.render("@", True, (blue)), (int(playX), int(playY)))
-        pygame.display.update()
-        
-        # how many frames AT MAX you want per second
-        clock.tick(3000)
 
 main()
 print ("\nHello World!")
+
+
+
+
 
 
 
