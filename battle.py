@@ -2,6 +2,8 @@
 #DESIGN LAYOUT
 ##########################################################################################################################################################
 
+#C:\Users\Nore5\AppData\Local\Programs\Python\Python38-32\python.exe "$(C:\Users\Nore5\Projects\Python\Battle\battle.py)"
+
 # There are three paths, and each path has 10 perks.
 # Whenever you level up, you're offered three perks at random, and one perk from your path that you chose.
 # Max Level is 10. There are 11 Floors, 11th Floor is the boss, everything else is randomly generated monsters.
@@ -120,7 +122,6 @@ class Room:
         self.bullets = []
         
     # note to self; break this big update into many smaller updates.
-    # also, staircase is broken. Don't know why.
     def Update (self):
         self.screen.fill(self.white)
         
@@ -167,7 +168,7 @@ class Room:
             self.playX += 0.2
 
         # update player collision rect
-        playRect = pygame.Rect(int(self.playX), int(self.playY), self.x1, self.y1)
+        self.playRect = pygame.Rect(int(self.playX), int(self.playY), self.x1, self.y1)
 
         # create top of screen GUI
         self.screen.blit(self.font.render(str(self.floor), True, self.blue), (int(self.width/32),int(self.height/32)))
