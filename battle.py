@@ -8,14 +8,14 @@
 # Whenever you level up, you're offered three perks at random, and one perk from your path that you chose.
 # Max Level is 10. There are 11 Floors, 11th Floor is the boss, everything else is randomly generated monsters.
 
-# BUILD 1
-# You can begin the game, be able to move, attack and defeat an enemy, move up to the 11th floor and win.
-# OUTDATED: NOW LIVE MOVEMENT     It's placed on a 2D ascii array.
+######### BUILD 1
+######### You can begin the game, be able to move, attack and defeat an enemy, move up to the 11th floor and win.
+######### OUTDATED: NOW LIVE MOVEMENT     It's placed on a 2D ascii array.
 
 # BUILD 2
 # Everything in Build 1, and...
 # There are at least three different options to do in combat. Enemies can deal damage and kill you. You can lose.
-# Enemies can move on the ascii array.
+# Enemies can move on the [NOW MAP] ascii array.
 
 # BUILD 3
 # Everything in Build 1 and 2, and...
@@ -371,10 +371,6 @@ def main():
     pygame.mixer.init(44100, -16, 2, 4096)
     pygame.init()
     
-
-    
-    
-    
     # Set it's caption to...Battle.yeah?
     pygame.display.set_caption('Battle.yeah') 
     
@@ -414,7 +410,6 @@ def main():
         
         # create top of screen GUI
         screen.blit(roomish.font.render(str(roomish.floor), True, roomish.blue), (int(roomish.width/32),int(roomish.height/32)))
-
 
 main()
 print ("\nHello World!")
