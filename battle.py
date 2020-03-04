@@ -8,7 +8,7 @@
 
 # BUILD 1
 # You can begin the game, be able to move, attack and defeat an enemy, move up to the 11th floor and win.
-# It's placed on a 2D ascii array.
+# OUTDATED: NOW LIVE MOVEMENT     It's placed on a 2D ascii array.
 
 # BUILD 2
 # Everything in Build 1, and...
@@ -44,6 +44,7 @@
 # There is a main menu, a settings menu, various game modes (Arena? Speedrun?), at least 30 Perks, and 20 items.
 # At least 6 different types of enemies, and 2 types of bosses. 
 
+# Idea, what if every second it paused and you could do stuff? live action turn based?
 
 ##########################################################################################################################################################
 #CODE AND STUFF
@@ -51,6 +52,7 @@
 
 import pygame
 import math
+import os
 
 print ()
 
@@ -117,19 +119,99 @@ class Bullet:
         if self.startVector[1] < 0 and self.startVector[1] < 0:
             self.dead = True
 
+# IDEA; enemy health tied to their color? like, darker = healtheri, lighter = injured?
+class Enemy:
+
+    def __init__ (self, posX, posY, sizeX, sizeY, health, color, duration, hitSound, hitChannel):
+        self.body = pygame.Rect(posX, posY, sizeX, sizeY)
+        self.dead = False
+        self.health = health
+        self.color = color
+        self.originalColor = color
+        self.flashColor = [(color[0]+60), (color[1]+60), (color[2]+60)]
+        self.duration = 0
+        self.flashDuration = duration
+        self.hit = hitSound
+        self.channel = hitChannel
+        self.tempCount = 0
+        self.tempTemp = self.hit.get_num_channels()
+        self.playingSound = False
+    
+    # runs every turn.
+    def Update (self):
+        
+        # if you started a sound, countdown until sound is over. once its over, stop the channel.
+        if self.playingSound:
+            if self.tempCount > 0:
+                self.tempCount -= 1
+            else:
+                self.tempCount = 0
+                self.playingSound = False
+                self.channel.stop()
+        
+        # manages the flashy flashy thing
+        if self.duration > 0:
+            self.duration -= 1
+        if self.duration == 0:
+            if self.color == self.flashColor:
+                self.color = self.originalColor
+    
+    # use this whenever a bullet hits the enemy. Clears the channel, resets the sound timer, and starts a new sound
+    def StartSound(self):
+        self.channel.stop()
+        self.tempCount = 190
+        self.playingSound = True
+        self.channel.play(self.hit)
+    
+    # when hit by a bullet, cause this to change color to flash color.
+    def Flash (self):
+    
+        # when hit, play a sound
+        self.StartSound()
+        
+        # also, if you're the base color, swap to the flash color. in update, you'll autoflip back after some frames
+        if self.color == self.originalColor:
+            self.color = self.flashColor
+            self.duration = self.flashDuration
+            
+            
+    # for all bullets, if a bullet has either end point inside this rect, reduce health by 1 and kill bullet. flash.
+    def BulletHit (self, bullets):
+        for i in range (0, len(bullets)):
+            if not bullets[i].dead:
+                if self.body.collidepoint(int(bullets[i].startVector[0]), int(bullets[i].startVector[1])):
+                    self.health -= 1
+                    bullets[i].dead = True
+                    self.Flash()
+                elif self.body.collidepoint(int(bullets[i].endVector[0]), int(bullets[i].endVector[1])):
+                    self.health -= 1
+                    bullets[i].dead = True
+                    self.Flash()
+        
+        # If you're outta health, you're outta luck.
+        if self.health < 0:
+            self.dead = True
+            self.hit.stop()
 
 def main():
     room = Room(10,4)
     print(room.display())
-    pygame.init()
     
     # create a surface on screen that has 240x180 size
     screen = pygame.display.set_mode((1080,680))
     
+    # initialize pygame and the sound mixer
+    pygame.mixer.init(44100, -16, 2, 4096)
+    pygame.init()
+    
+    # create a few tools to help make everything run smoothly.
+    clock = pygame.time.Clock()     # helps regulate FPS
+    hitEffect = pygame.mixer.Sound('thump.ogg')       # the enemy hit sound
+    
     # fill it with white!
-    white = (255, 255, 255) 
-    green = (0, 255, 0) 
-    blue = (0, 0, 128) 
+    white = [255, 255, 255] 
+    green = [0, 255, 0] 
+    blue = [0, 0, 128]
     screen.fill(white)
     
     # Set it's caption to...Battle.yeah?
@@ -144,6 +226,9 @@ def main():
     # Updates screen to match new changes.
     pygame.display.update()
 
+    # put all enemies in here
+    enemies = []
+    enemies.append(Enemy(300,300,50,50, 200, blue, 100, hitEffect, pygame.mixer.find_channel()))
     
     running = True
 
@@ -165,16 +250,17 @@ def main():
     
     # put all bullets in here
     bullets = []
-    bullets.append(Bullet(3, 50, startX, startY, endX, endY, 0.4))
-    line = bullets[0]
+    #bullets.append(Bullet(3, 50, startX, startY, endX, endY, 0.4))
+    #line = bullets[0]
 
     while running:
         screen.fill(white)
+            
         # Gets ALL events from the event queue
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-            
+                
             # If event is WASD, modify player movement bools
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_w:
@@ -195,33 +281,37 @@ def main():
                 if event.key == pygame.K_d:
                     movementBools["right"] = False
                     
-            # On click, draw line from player to cursor
+            # On click, fire a bullet from player aimed at the cursor
             elif event.type == pygame.MOUSEBUTTONDOWN:
-                drawingLine = True
                 x, y = pygame.mouse.get_pos()
                 x1, y1 = font.size("@")
                 startX, startY = playX + (0.5*x1), playY+(0.5*y1)
                 bullets.append(Bullet(3, 50, startX, startY, x, y, 0.5))
-            elif event.type == pygame.MOUSEBUTTONUP:
-                drawingLine = False
         
         # create cursor
         pygame.draw.rect(screen, blue, pygame.Rect(pygame.mouse.get_pos(),(10,10)))
         
-        """
-        # draw line
-        if drawingLine:
-            x, y = font.size("@")
-            startX, startY = playX + (0.5*x), playY+(0.5*y)
-            endX, endY = pygame.mouse.get_pos()
-            pygame.draw.line(screen, blue, (int(startX), int(startY)), (int(endX), int(endY)), 1)
-        """
+        # for all enemies, update them!
+        for i in range (0, len(enemies)):
+            enemies[i].Update()
         
-        # draw ALL bullets in bullets[]
+        # for all enemies, draw them, then check to see if any of them were hit by bullets
+        for i in range (0, len(enemies)):
+            pygame.draw.rect(screen, enemies[i].color, enemies[i].body)
+            enemies[i].BulletHit(bullets)
+        
+        # remove all hit enemies enemies[]
+        temp = []
+        for i in range (0, len(enemies)):
+            if not enemies[i].dead:
+                temp.append(enemies[i])
+        enemies = temp
+        
+        # move all bullets, then draw them!
         for i in range (0, len(bullets)):
-            pygame.draw.line(screen, blue, (int(bullets[i].startVector[0]), int(bullets[i].startVector[1])), (int(bullets[i].endVector[0]), int(bullets[i].endVector[1])), bullets[i].width)
             bullets[i].Move()
-
+            pygame.draw.line(screen, blue, (int(bullets[i].startVector[0]), int(bullets[i].startVector[1])), (int(bullets[i].endVector[0]), int(bullets[i].endVector[1])), bullets[i].width)
+            
         # if any bullets are out of bounds, remove them from bullets[]
         temp = []
         for i in range (0, len(bullets)):
@@ -242,9 +332,9 @@ def main():
         # Now manipulate all the on screen objects
         screen.blit(font.render("@", True, (blue)), (int(playX), int(playY)))
         pygame.display.update()
-
-
-    
+        
+        # how many frames AT MAX you want per second
+        clock.tick(3000)
 
 main()
 print ("\nHello World!")
