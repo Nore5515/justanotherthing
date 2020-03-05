@@ -77,10 +77,12 @@ class Room:
         # Create a font for text to be used on screen
         self.font = pygame.font.Font('freesansbold.ttf', 32) 
         
-        # Some variables for player position
+        # Some variables for player position and movement
         self.playX = 100
         self.playY = 100
         self.floor = 1
+        self.playSpeed = 0.2
+        self.playBaseSpeed = self.playSpeed
         self.x1, self.y1 = self.font.size("@")
         self.playRect = pygame.Rect(self.playX, self.playY, self.x1, self.y1)
         self.movementBools = {
@@ -107,29 +109,50 @@ class Room:
         endX, endY = 10, 10
         lineLength = 150
         
+        # bullet bool dicts
+        self.friendlyBullet = {
+            "Enemy": False,
+            "Player": True
+        }
+        self.enemyBullet = {
+            "Enemy": True,
+            "Player": False
+        }
+        
+        # weapon stats. underscores mean defaults.
+        self.weapons = {
+            "Sword": Weapon("Sword", self),
+            "Dagger": Weapon("Dagger", self),
+            "Arrow": Weapon("Arrow", self),
+            "Enemy": Weapon("Enemy", self)
+        }
+        
+        # generate the dict of bullet types
+        # width, length, speed, lifetime, deceleration, damage
+        self.bulletDict = {
+            "Arrow": self.weapons["Arrow"].bullet,
+            "Sword": self.weapons["Sword"].bullet,
+            "Dagger": self.weapons["Dagger"].bullet,
+            "Enemy": self.weapons["Enemy"].bullet
+        }
+        
+        # put all bullets in here
+        self.bullets = []
+        
         # generate all enemies for all floors (rn just one enemy per floor, but could be diff later)
         for i in range (0, 12):
-            self.roomEnemies[i] = Enemy(300,300,50,50, 2, self.blue, 100, self.hitEffect, pygame.mixer.find_channel())
+            self.roomEnemies[i] = Enemy(300,300,50,50, 20, self.blue, 100, self.hitEffect, pygame.mixer.find_channel(), 0.1, self.bulletDict["Enemy"], 5)
+
+        # TODO; CREATE ENEMY DICTIONARY
 
         # put all enemies in here
         self.enemies = []
-        self.enemies.append(Enemy(300,300,50,50, 20, self.blue, 100, self.hitEffect, pygame.mixer.find_channel()))
+        self.enemies.append(self.roomEnemies[self.floor])
 
         # generate all the stairs
         self.staircases = []
         self.staircases.append(Stairs("First Floor", int(width/2), int(3*height/4), 30, 30, self.blue, self))
         self.staircases[0].ExitPosition(int(width/2), int(height/4))
-
-        # generate the dict of bullet types
-        # width, length, speed, lifetime, deceleration, damage
-        self.bulletDict = {
-            "Arrow": Bullet(3, 45, 1.50, 800, 0.001, 1),
-            "Sword": Bullet(30, 20, 0.75, 1000, 0.001, 3),
-            "Dagger": Bullet(10, 30, 1, 800, 0.001, 2) 
-        }
-        
-        # put all bullets in here
-        self.bullets = []
         
     # note to self; break this big update into many smaller updates.
     def Update (self):
@@ -168,8 +191,34 @@ class Room:
                 x, y = pygame.mouse.get_pos()
                 x1, y1 = self.font.size("@")
                 self.startX, self.startY = self.playX + (0.5*x1), self.playY+(0.5*y1)
+                
+                # fire a bullet towarsd your cursor!
                 if event.button == 1:
                     self.bullets.append(self.bulletDict[self.weapon].start(self.startX, self.startY, x, y))
+                    
+                    # if alt-fire sword buffed, reset it.
+                    #if self.sword["altBuffed"]:
+                        #print (self.bulletDict["Sword"].damage)
+                        #self.sword["Damage"] = self.sword["_Damage"]
+                        #self.sword["Speed"] = self.sword["_Speed"]
+                        #self.sword["altBuffed"] = False
+                        #print ("REMOVING BUFF")
+                        
+                # alt fires!
+                elif event.button == 3:
+                
+                    # a "dash", more liek a short ranged teleport
+                    if self.weapon == "Dagger":
+                        self.playSpeed *= 200
+                    
+                    # boost your next attack's speed and strength!
+                    #elif self.weapon == "Sword" and not self.sword["altBuffed"]:
+                        #self.sword["Damage"] *= 3
+                        #self.sword["Speed"] *= 3
+                        #self.sword["altBuffed"] = True
+                        #print ("APPLYING BUFF")
+                
+                # switch weapons on mouse scroll
                 elif event.button == 4:
                     if self.weapon == "Arrow":
                         self.weapon = "Sword"
@@ -187,13 +236,18 @@ class Room:
                 
         # move player
         if self.movementBools["up"]:
-            self.playY -= 0.2
+            self.playY -= self.playSpeed
         if self.movementBools["down"]:
-            self.playY += 0.2
+            self.playY += self.playSpeed
         if self.movementBools["left"]:
-            self.playX -= 0.2
+            self.playX -= self.playSpeed
         if self.movementBools["right"]:
-            self.playX += 0.2
+            self.playX += self.playSpeed
+        
+        # if moving faster than base, reduce to base.
+        # also could decelerte!
+        if self.playSpeed > self.playBaseSpeed:
+            self.playSpeed = self.playBaseSpeed
 
         # update player collision rect
         self.playRect = pygame.Rect(int(self.playX), int(self.playY), self.x1, self.y1)
@@ -227,7 +281,7 @@ class Room:
         
         # for all enemies, update them!
         for i in range (0, len(self.enemies)):
-            self.enemies[i].Update(self.enemies, self.playRect)
+            self.enemies[i].Update(self)
         
         # for all enemies, draw them, then check to see if any of them were hit by bullets
         for i in range (0, len(self.enemies)):
@@ -247,6 +301,73 @@ class Room:
         
         # how many frames AT MAX you want per second
         self.clock.tick(3000)
+
+class Weapon:
+
+    # all you do is pass it the name, it handles the rest.
+    # this is because I can't pass by reference >:(
+    def __init__ (self, name, room):
+        if name == "Sword":
+            self.stats = {
+                "Damage": 5,
+                "_Damage": 5,
+                "Speed": 0.5,
+                "_Speed": 0.5,
+                "Size": [30, 20],
+                "_Size": [30,20],
+                "Lifetime": 1000,
+                "_Lifetime": 1000,
+                "Decel": 0.0005,
+                "_Decel": 0.0005,
+                "altBuffed": False,
+                "friendlyBools": room.friendlyBullet
+            }
+        elif name == "Dagger":
+            self.stats = {
+                "Damage": 2,
+                "_Damage": 2,
+                "Speed": 1.25,
+                "_Speed": 1.25,
+                "Size": [6, 30],
+                "_Size": [6,30],
+                "Lifetime": 600,
+                "_Lifetime": 600,
+                "Decel": 0.002,
+                "_Decel": 0.002,
+                "altBuffed": False,
+                "friendlyBools": room.friendlyBullet
+            }
+        elif name == "Arrow":
+            self.stats = {
+                "Damage": 1,
+                "_Damage": 1,
+                "Speed": 1.50,
+                "_Speed": 1.50,
+                "Size": [3, 45],
+                "_Size": [3,45],
+                "Lifetime": 800,
+                "_Lifetime": 800,
+                "Decel": 0.001,
+                "_Decel": 0.001,
+                "altBuffed": False,
+                "friendlyBools": room.friendlyBullet
+            }
+        elif name == "Enemy":
+            self.stats = {
+                "Damage": 1,
+                "_Damage": 1,
+                "Speed": 0.75,
+                "_Speed": 0.75,
+                "Size": [5, 30],
+                "_Size": [5, 30],
+                "Lifetime": 800,
+                "_Lifetime": 800,
+                "Decel": 0.001,
+                "_Decel": 0.001,
+                "altBuffed": False,
+                "friendlyBools": room.enemyBullet
+            }
+        self.bullet = Bullet(self.stats["Size"][0], self.stats["Size"][1], self.stats["Speed"], self.stats["Lifetime"], self.stats["Decel"], self.stats["Damage"], self.stats["friendlyBools"])
 
 class Stairs:
 
@@ -280,14 +401,16 @@ class Stairs:
                 enemies.append(self.room.roomEnemies[floor])
         return playX, playY, floor, enemies
 
+# POTENTIAL ISSUE, SWORD BULLET CAN PASS OVER ENEMY IF AT THE RIGHT ANGLE
 class Bullet:
     
     # just take in the basic information about the bullet. assing position using create.
-    def __init__ (self, width, length, speed, lifetime, deceleration, damage):
+    def __init__ (self, width, length, speed, lifetime, deceleration, damage, friendlyBools):
         # assigning variables.
         self.width, self.length, self.speed, self.lifetime, self.damage = width, length, speed, lifetime, damage
         self.dead = False
         self.deceleration = deceleration
+        self.friendlyBools = friendlyBools
 
     """
     # a lot is going on, but in reality its not that bad.
@@ -373,8 +496,9 @@ class Bullet:
 # IDEA; enemy health tied to their color? like, darker = healtheri, lighter = injured?
 class Enemy:
 
-    def __init__ (self, posX, posY, sizeX, sizeY, health, color, duration, hitSound, hitChannel):
-        self.body = pygame.Rect(posX, posY, sizeX, sizeY)
+    def __init__ (self, posX, posY, sizeX, sizeY, health, color, duration, hitSound, hitChannel, speed, bullet, inaccuracy):
+        self.coordinates = [posX, posY]
+        self.size = [sizeX, sizeY]
         self.dead = False
         self.health = health
         self.color = color
@@ -385,10 +509,19 @@ class Enemy:
         self.hit = hitSound
         self.channel = hitChannel
         self.playingSound = False
+        self.speed = speed
+        self.count = 0
+        self.bullet = bullet
+        self.inaccuracy = inaccuracy
     
     # runs every turn.
     # takes in a list of all current enemies, as well as the player's rect
-    def Update (self, enemies, player):
+    def Update (self, room):
+        
+        # every so often, fire a bullet at the player
+        self.count += 1
+        if self.count % 100 == 0:
+            self.FireBullet(room)
         
         # if you started a sound, countdown until sound is over. once its over, stop the channel.
         if self.playingSound:
@@ -398,14 +531,32 @@ class Enemy:
                 self.tempCount = 0
                 self.playingSound = False
                 self.channel.stop()
-        
+
         # manages the flashy flashy thing
         if self.duration > 0:
             self.duration -= 1
         if self.duration == 0:
             if self.color == self.flashColor:
                 self.color = self.originalColor
-    
+
+        # chases the player
+        if self.coordinates[0]+(0.5*self.size[0]) < room.playX-(0.5*room.playRect.width):
+            self.coordinates[0] += self.speed
+        elif self.coordinates[0]-(0.5*self.size[0]) > room.playX+(0.5*room.playRect.width):
+            self.coordinates[0] -= self.speed
+        if self.coordinates[1]+(0.5*self.size[1]) < room.playY-(0.5*room.playRect.height):
+            self.coordinates[1] += self.speed
+        elif self.coordinates[1]-(0.5*self.size[1]) > room.playY+(0.5*room.playRect.height):
+            self.coordinates[1] -= self.speed
+        
+        # updates the enemy rect
+        self.body = pygame.Rect(int(self.coordinates[0]), int(self.coordinates[1]), int(self.size[0]), int(self.size[1]))
+
+    # fires a given bullet from this enemy towards the player, then adds the bullet to the bullet list
+    # the destination point is a point that is 0 to Inaccuracy away from the player.
+    def FireBullet(self, room):
+        room.bullets.append(self.bullet.start(self.coordinates[0]+(self.size[0]*0.5), self.coordinates[1]+(self.size[1]*0.5), room.playX, room.playY))
+
     # use this whenever a bullet hits the enemy. Clears the channel, resets the sound timer, and starts a new sound
     def StartSound(self):
         self.channel.stop()
@@ -428,7 +579,7 @@ class Enemy:
     # for all bullets, if a bullet has either end point inside this rect, reduce health by 1 and kill bullet. flash.
     def BulletHit (self, bullets):
         for i in range (0, len(bullets)):
-            if not bullets[i].dead:
+            if not bullets[i].dead and not bullets[i].friendlyBools["Enemy"]:
                 for j in range (0, 4):
                     if self.body.collidepoint(bullets[i].body[j]):
                         self.health -= bullets[i].damage
@@ -437,7 +588,7 @@ class Enemy:
                         break
         
         # If you're outta health, you're outta luck.
-        if self.health < 0:
+        if self.health <= 0:
             self.dead = True
             self.hit.stop()
 
