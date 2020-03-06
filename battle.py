@@ -12,10 +12,10 @@
 ######### You can begin the game, be able to move, attack and defeat an enemy, move up to the 11th floor and win.
 ######### OUTDATED: NOW LIVE MOVEMENT     It's placed on a 2D ascii array.
 
-# BUILD 2
-# Everything in Build 1, and...
-# There are at least three different options to do in combat. Enemies can deal damage and kill you. You can lose.
-# Enemies can move on the [NOW MAP] ascii array.
+######### BUILD 2
+######### Everything in Build 1, and...
+######### There are at least three different options to do in combat. Enemies can deal damage and kill you. You can lose.
+######### Enemies can move on the [NOW MAP] ascii array.
 
 # BUILD 3
 # Everything in Build 1 and 2, and...
@@ -47,6 +47,8 @@
 # At least 6 different types of enemies, and 2 types of bosses. 
 
 # Idea, what if every second it paused and you could do stuff? live action turn based?
+# TODO; Make a player class.
+# TODO; Going up a floor clears all bullets    <-- should be easy?
 
 ##########################################################################################################################################################
 #CODE AND STUFF
@@ -56,6 +58,7 @@ import pygame
 import math
 import os
 import copy
+import random
 
 print ()
 
@@ -77,10 +80,11 @@ class Room:
         # Create a font for text to be used on screen
         self.font = pygame.font.Font('freesansbold.ttf', 32) 
         
-        # Some variables for player position and movement
+        # Some variables for player position and movement and other playerly things
         self.playX = 100
         self.playY = 100
         self.floor = 1
+        self.playHP = 30
         self.playSpeed = 0.2
         self.playBaseSpeed = self.playSpeed
         self.x1, self.y1 = self.font.size("@")
@@ -141,7 +145,7 @@ class Room:
         
         # generate all enemies for all floors (rn just one enemy per floor, but could be diff later)
         for i in range (0, 12):
-            self.roomEnemies[i] = Enemy(300,300,50,50, 20, self.blue, 100, self.hitEffect, pygame.mixer.find_channel(), 0.1, self.bulletDict["Enemy"], 5)
+            self.roomEnemies[i] = Enemy(300,300,50,50, 20, self.blue, 100, self.hitEffect, pygame.mixer.find_channel(), 0.1, self.bulletDict["Enemy"], 100)
 
         # TODO; CREATE ENEMY DICTIONARY
 
@@ -249,12 +253,13 @@ class Room:
         if self.playSpeed > self.playBaseSpeed:
             self.playSpeed = self.playBaseSpeed
 
-        # update player collision rect
+        # update player collision 
         self.playRect = pygame.Rect(int(self.playX), int(self.playY), self.x1, self.y1)
 
         # create top of screen GUI
         self.screen.blit(self.font.render(str(self.floor), True, self.blue), (int(self.width/32),int(self.height/32)))
         self.screen.blit(self.font.render(self.weapon, True, self.blue), (int(self.width/32), int(self.height/14)))
+        self.screen.blit(self.font.render(str(self.playHP), True, self.blue), (int(self.width/2), int(self.height/32)))
         
         # create cursor
         pygame.draw.rect(self.screen, self.blue, pygame.Rect(pygame.mouse.get_pos(),(10,10)))
@@ -294,6 +299,15 @@ class Room:
             if not self.enemies[i].dead:
                 temp.append(self.enemies[i])
         self.enemies = temp
+        
+        # now, for all remaining bullets, check to see if they hit player.
+        for i in range (0, len(self.bullets)):
+            if not self.bullets[i].friendlyBools["Player"]:
+                for j in range (0, 4):
+                    if self.playRect.collidepoint(self.bullets[i].body[j]):
+                        self.playHP -= 1
+                        self.bullets[i].dead = True
+                        break
         
         # Now blit the player's icon onto the screen, and then update the whole display
         self.screen.blit(self.font.render("@", True, (self.blue)), (int(self.playX), int(self.playY)))
@@ -513,16 +527,16 @@ class Enemy:
         self.count = 0
         self.bullet = bullet
         self.inaccuracy = inaccuracy
-    
+
     # runs every turn.
     # takes in a list of all current enemies, as well as the player's rect
     def Update (self, room):
-        
+
         # every so often, fire a bullet at the player
         self.count += 1
-        if self.count % 100 == 0:
+        if self.count % 150 == 0:
             self.FireBullet(room)
-        
+
         # if you started a sound, countdown until sound is over. once its over, stop the channel.
         if self.playingSound:
             if self.tempCount > 0:
@@ -548,14 +562,15 @@ class Enemy:
             self.coordinates[1] += self.speed
         elif self.coordinates[1]-(0.5*self.size[1]) > room.playY+(0.5*room.playRect.height):
             self.coordinates[1] -= self.speed
-        
+
         # updates the enemy rect
         self.body = pygame.Rect(int(self.coordinates[0]), int(self.coordinates[1]), int(self.size[0]), int(self.size[1]))
 
     # fires a given bullet from this enemy towards the player, then adds the bullet to the bullet list
     # the destination point is a point that is 0 to Inaccuracy away from the player.
     def FireBullet(self, room):
-        room.bullets.append(self.bullet.start(self.coordinates[0]+(self.size[0]*0.5), self.coordinates[1]+(self.size[1]*0.5), room.playX, room.playY))
+        aimVec = [room.playX + (random.uniform(-1,1) * self.inaccuracy), room.playY + (random.uniform(-1,1) * self.inaccuracy)]
+        room.bullets.append(self.bullet.start(self.coordinates[0]+(self.size[0]*0.5), self.coordinates[1]+(self.size[1]*0.5), aimVec[0], aimVec[1]))
 
     # use this whenever a bullet hits the enemy. Clears the channel, resets the sound timer, and starts a new sound
     def StartSound(self):
@@ -563,13 +578,13 @@ class Enemy:
         self.tempCount = 190
         self.playingSound = True
         self.channel.play(self.hit)
-    
+
     # when hit by a bullet, cause this to change color to flash color.
     def Flash (self):
-    
+
         # when hit, play a sound
         self.StartSound()
-        
+
         # also, if you're the base color, swap to the flash color. in update, you'll autoflip back after some frames
         if self.color == self.originalColor:
             self.color = self.flashColor
@@ -634,6 +649,10 @@ def main():
 
     while roomish.running:
         roomish.Update()
+        
+        if roomish.playHP <= 0:
+            roomish.running = False
+            print ("GAME OVER!")
         
         # create top of screen GUI
         screen.blit(roomish.font.render(str(roomish.floor), True, roomish.blue), (int(roomish.width/32),int(roomish.height/32)))
